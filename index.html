@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VPN Hub — агрегатор бесплатных VPN-конфигов</title>
+<meta name="description" content="Сборка бесплатных VPN-конфигураций из открытых источников GitHub в одну подписку">
+<style>
+  :root {
+    --bg: #0b0e14;
+    --panel: #131826;
+    --panel2: #1a2133;
+    --border: #232c42;
+    --text: #e6ebf5;
+    --muted: #8b96ad;
+    --accent: #4f8cff;
+    --accent2: #22d3a5;
+    --danger: #ff6b6b;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    line-height: 1.5;
+    min-height: 100vh;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 24px 16px 64px; }
+  header { text-align: center; padding: 28px 0 8px; }
+  h1 {
+    font-size: 30px; font-weight: 800; letter-spacing: -0.5px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .sub { color: var(--muted); margin-top: 6px; font-size: 14px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-top: 24px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
+    padding: 16px; text-align: center;
+  }
+  .card .num { font-size: 26px; font-weight: 800; }
+  .card .lbl { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 4px; }
+  h2 { font-size: 18px; margin: 36px 0 14px; display: flex; align-items: center; gap: 8px; }
+  h2::before { content: ''; width: 4px; height: 18px; border-radius: 2px; background: linear-gradient(180deg, var(--accent), var(--accent2)); }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 999px;
+    padding: 6px 14px; font-size: 13px; color: var(--text);
+  }
+  .chip b { color: var(--accent2); }
+  .subs { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+  .subcard {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .subcard .t { font-weight: 700; font-size: 14px; display: flex; justify-content: space-between; align-items: center; }
+  .subcard .cnt { color: var(--accent2); font-size: 12px; font-weight: 600; }
+  .subcard .url {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: var(--muted);
+    word-break: break-all; background: var(--panel2); border-radius: 8px; padding: 8px;
+  }
+  .row { display: flex; gap: 8px; }
+  button {
+    cursor: pointer; border: none; border-radius: 9px; padding: 9px 14px;
+    font-size: 13px; font-weight: 700; color: #fff; background: var(--accent);
+    transition: filter .15s;
+  }
+  button:hover { filter: brightness(1.15); }
+  button.ghost { background: var(--panel2); border: 1px solid var(--border); color: var(--text); font-weight: 500; }
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border-radius: 14px; overflow: hidden; font-size: 13px; }
+  th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+  tr:last-child td { border-bottom: none; }
+  td a { color: var(--accent); text-decoration: none; }
+  td a:hover { text-decoration: underline; }
+  .ok { color: var(--accent2); font-weight: 700; }
+  .fail { color: var(--danger); font-weight: 700; }
+  .search-box { width: 100%; background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    color: var(--text); padding: 13px 16px; font-size: 15px; outline: none; }
+  .search-box:focus { border-color: var(--accent); }
+  .hint { color: var(--muted); font-size: 12px; margin-top: 8px; }
+  #results { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; max-height: 480px; overflow-y: auto; }
+  .r-item { display: flex; gap: 10px; align-items: center; background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 9px 12px; font-size: 12px; cursor: pointer; }
+  .r-item:hover { border-color: var(--accent); }
+  .r-proto { min-width: 74px; text-align: center; font-weight: 700; font-size: 11px; border-radius: 6px; padding: 3px 0;
+    background: rgba(79,140,255,.15); color: var(--accent); }
+  .r-host { font-family: ui-monospace, monospace; word-break: break-all; flex: 1; }
+  .toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(80px);
+    background: var(--accent2); color: #04241c; font-weight: 700; font-size: 13px;
+    padding: 11px 22px; border-radius: 999px; transition: transform .25s; z-index: 9;
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+  footer { margin-top: 48px; text-align: center; color: var(--muted); font-size: 12px; }
+  footer a { color: var(--accent); text-decoration: none; }
+  .warn { background: rgba(255,107,107,.08); border: 1px solid rgba(255,107,107,.25); border-radius: 12px;
+    padding: 12px 16px; font-size: 13px; color: #ffb3b3; margin-top: 36px; }
+  @media (max-width: 640px) { h1 { font-size: 24px; } .wrap { padding-top: 12px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>VPN Hub</h1>
+    <div class="sub">Агрегатор бесплатных конфигов из открытых источников GitHub · обновляется автоматически каждый час</div>
+  </header>
+
+  <div class="grid" id="stats"></div>
+
+  <h2>Протоколы</h2>
+  <div class="chips" id="chips"></div>
+
+  <h2>Подписки</h2>
+  <div class="subs" id="subs"></div>
+
+  <h2>Источники</h2>
+  <table>
+    <thead><tr><th>Репозиторий</th><th>Конфигов</th><th>Статус</th></tr></thead>
+    <tbody id="srcRows"></tbody>
+  </table>
+
+  <h2>Поиск по узлам</h2>
+  <input class="search-box" id="q" type="search" placeholder="host:port, страна, имя… (минимум 3 символа)">
+  <div class="hint">Клик по результату копирует ссылку конфига. Полный список — <a id="allLink" style="color:var(--accent)" href="#">sub/all.txt</a></div>
+  <div id="results"></div>
+
+  <div class="warn">⚠️ Все ключи собраны из публичных источников и предназначены для обхода цензуры. Не используйте их для передачи чувствительных данных.</div>
+
+  <footer>
+    Собрано из <span id="fSrc">—</span> репозиториев GitHub · обновлено <span id="upd">—</span> ·
+    <a href="https://github.com/kuzhakovAndrey/vpn-hub">исходники</a>
+  </footer>
+</div>
+<div class="toast" id="toast">Скопировано ✓</div>
+
+<script>
+'use strict';
+const BASE = location.pathname.replace(/[^/]*$/, '');
+let DATA = null;
+let ALL_LINES = null;
+
+function fmt(n) { return n == null ? '—' : n.toLocaleString('ru-RU'); }
+
+async function copy(text) {
+  try { await navigator.clipboard.writeText(text); }
+  catch (e) {
+    const ta = document.createElement('textarea');
+    ta.value = text; document.body.appendChild(ta); ta.select();
+    document.execCommand('copy'); ta.remove();
+  }
+  toast('Скопировано ✓');
+}
+
+let toastTimer = null;
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 1600);
+}
+
+function subUrl(file) { return new URL(BASE + 'sub/' + file, location.href).href; }
+
+function renderSubs() {
+  const box = document.getElementById('subs');
+  const items = [{ file: 'base64.txt', title: 'Все протоколы (base64)', cnt: DATA.stats.nodes },
+                 { file: 'all.txt', title: 'Все протоколы (plain)', cnt: DATA.stats.nodes }];
+  for (const [p, cnt] of Object.entries(DATA.protocols)) items.push({ file: p + '_base64.txt', title: p.toUpperCase() + ' (base64)', cnt });
+  box.innerHTML = '';
+  for (const it of items) {
+    const url = subUrl(it.file);
+    const el = document.createElement('div');
+    el.className = 'subcard';
+    el.innerHTML = `<div class="t">${it.title} <span class="cnt">${fmt(it.cnt)}</span></div>
+      <div class="url">${url}</div>
+      <div class="row"><button data-copy="${url}">Копировать URL</button>
+      <button class="ghost" onclick="location.href='${url}'">Открыть</button></div>`;
+    el.querySelector('button').addEventListener('click', () => copy(url));
+    box.appendChild(el);
+  }
+}
+
+function render() {
+  const s = DATA.stats;
+  document.getElementById('stats').innerHTML = `
+    <div class="card"><div class="num">${fmt(s.nodes)}</div><div class="lbl">конфигов всего</div></div>
+    <div class="card"><div class="num">${fmt(s.sourcesOk)}/${s.sourcesTotal}</div><div class="lbl">источников онлайн</div></div>
+    <div class="card"><div class="num">${Object.keys(DATA.protocols).length}</div><div class="lbl">протоколов</div></div>
+    <div class="card"><div class="num">${Object.keys(DATA.countries).length}</div><div class="lbl">стран (оценка)</div></div>`;
+  document.getElementById('chips').innerHTML = Object.entries(DATA.protocols)
+    .sort((a, b) => b[1] - a[1])
+    .map(([p, c]) => `<span class="chip">${p} <b>${fmt(c)}</b></span>`).join('');
+  document.getElementById('srcRows').innerHTML = DATA.sources.map((x) =>
+    `<tr><td><a href="${x.repo}" target="_blank" rel="noopener">${x.name}</a></td>
+     <td>${fmt(x.count)}</td><td>${x.ok ? '<span class="ok">● OK</span>' : '<span class="fail">● FAIL</span>'}</td></tr>`).join('');
+  document.getElementById('fSrc').textContent = s.sourcesOk;
+  document.getElementById('upd').textContent = new Date(DATA.updated).toLocaleString('ru-RU');
+  document.getElementById('allLink').href = subUrl('all.txt');
+  renderSubs();
+}
+
+async function ensureAll() {
+  if (ALL_LINES) return ALL_LINES;
+  const r = await fetch(subUrl('all.txt'));
+  ALL_LINES = (await r.text()).split('\n').filter(Boolean);
+  return ALL_LINES;
+}
+
+let searchSeq = 0;
+document.getElementById('q').addEventListener('input', async (e) => {
+  const v = e.target.value.trim().toLowerCase();
+  const box = document.getElementById('results');
+  const seq = ++searchSeq;
+  if (v.length < 3) { box.innerHTML = ''; return; }
+  const lines = await ensureAll();
+  if (seq !== searchSeq) return;
+  const protoOf = (l) => (l.match(/^([a-z0-9]+):\/\//) || [])[1] || '?';
+  const hits = lines.filter((l) => l.toLowerCase().includes(v)).slice(0, 200);
+  box.innerHTML = hits.length ? '' : '<div class="hint">Ничего не найдено</div>';
+  for (const l of hits) {
+    const el = document.createElement('div');
+    el.className = 'r-item';
+    let label = l;
+    try { label = decodeURIComponent((l.split('#')[1] || '').replace(/\+/g, ' ')) || l.slice(0, 60); } catch (err) {}
+    el.innerHTML = `<span class="r-proto">${protoOf(l)}</span><span class="r-host">${label.replace(/</g, '&lt;')}</span>`;
+    el.addEventListener('click', () => copy(l));
+    box.appendChild(el);
+  }
+});
+
+(async () => {
+  try {
+    const r = await fetch(BASE + 'data.json', { cache: 'no-store' });
+    DATA = await r.json();
+    render();
+  } catch (e) {
+    document.getElementById('stats').innerHTML =
+      '<div class="card"><div class="num">⏳</div><div class="lbl">первая сборка ещё выполняется, зайдите через несколько минут</div></div>';
+  }
+})();
+</script>
+</body>
+</html>
