@@ -306,7 +306,7 @@ function countryHint(host) {
       } catch (e) {}
     }
     const uniq = [...new Set(links)];
-    console.log(`[fetch] ${s.id}: ${uniq.size} links`);
+    console.log(`[fetch] ${s.id}: ${uniq.length} links`);
     srcStats.push({ id: s.id, name: s.name, repo: s.repo, count: uniq.length, ok: uniq.length > 0 });
     for (const l of uniq) allRaw.push({ src: s.id, link: l });
   }
