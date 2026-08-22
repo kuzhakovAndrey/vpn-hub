@@ -1,24 +1,35 @@
 'use strict';
 const fs = require('fs');
+const net = require('net');
 const path = require('path');
 
 const SCRIPT_DIR = __dirname;
 const DIST = process.env.OUT_DIR || path.join(SCRIPT_DIR, 'dist');
+const PING_CAP = parseInt(process.env.PING_CAP || '1200', 10);
+const EXPORT_CAP = parseInt(process.env.EXPORT_CAP || '800', 10);
+const TCP_TIMEOUT = parseInt(process.env.TCP_TIMEOUT || '2000', 10);
+const SKIP_PING = process.env.SKIP_PING === '1';
+const MSK_NODES = ['ru1.node.check-host.net', 'ru2.node.check-host.net'];
 
 const SOURCES = [
-  { id: 'pawdroid',    name: 'Pawdroid/Free-servers',        repo: 'https://github.com/Pawdroid/Free-servers',        url: 'https://raw.githubusercontent.com/Pawdroid/Free-servers/main/sub' },
-  { id: 'free-nodes',  name: 'free-nodes/v2rayfree',         repo: 'https://github.com/free-nodes/v2rayfree',         url: 'https://raw.githubusercontent.com/free-nodes/v2rayfree/main/sub' },
-  { id: 'igareck',     name: 'igareck/vpn-configs-for-russia', repo: 'https://github.com/igareck/vpn-configs-for-russia', url: 'https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/main/BLACK_VLESS_RUS.txt' },
-  { id: 'awesome-vpn', name: 'awesome-vpn/awesome-vpn',      repo: 'https://github.com/awesome-vpn/awesome-vpn',      url: 'https://raw.githubusercontent.com/awesome-vpn/awesome-vpn/master/all' },
-  { id: 'mahdibland',  name: 'mahdibland/V2RayAggregator',   repo: 'https://github.com/mahdibland/V2RayAggregator',   url: 'https://raw.githubusercontent.com/mahdibland/V2RayAggregator/master/sub/sub_merge.txt' },
-  { id: 'eternity',    name: 'mahdibland (Eternity)',        repo: 'https://github.com/mahdibland/V2RayAggregator',   url: 'https://raw.githubusercontent.com/mahdibland/V2RayAggregator/master/Eternity.txt' },
-  { id: 'epodonios',   name: 'Epodonios/v2ray-configs',      repo: 'https://github.com/Epodonios/v2ray-configs',      url: 'https://raw.githubusercontent.com/Epodonios/v2ray-configs/main/All_Configs_Sub.txt' },
-  { id: 'barry-far',   name: 'barry-far/V2ray-Config',       repo: 'https://github.com/barry-far/V2ray-Config',       url: 'https://raw.githubusercontent.com/barry-far/V2ray-Config/main/All_Configs_Sub.txt' },
-  { id: 'barabama',    name: 'Barabama/FreeNodes',           repo: 'https://github.com/Barabama/FreeNodes',           url: 'https://raw.githubusercontent.com/Barabama/FreeNodes/feat/ai-crawler-v2/nodes/nodev2ray.txt' },
-  { id: 'snakem982',   name: 'snakem982/proxypool',          repo: 'https://github.com/snakem982/proxypool',          url: 'https://raw.githubusercontent.com/snakem982/proxypool/main/source/v2ray-2.txt' },
+  { id: 'pawdroid',      name: 'Pawdroid/Free-servers',          repo: 'https://github.com/Pawdroid/Free-servers',          url: 'https://raw.githubusercontent.com/Pawdroid/Free-servers/main/sub' },
+  { id: 'free-nodes',    name: 'free-nodes/v2rayfree',           repo: 'https://github.com/free-nodes/v2rayfree',           url: 'https://raw.githubusercontent.com/free-nodes/v2rayfree/main/sub' },
+  { id: 'igareck',       name: 'igareck/vpn-configs-for-russia', repo: 'https://github.com/igareck/vpn-configs-for-russia', url: 'https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/main/BLACK_VLESS_RUS.txt' },
+  { id: 'awesome-vpn',   name: 'awesome-vpn/awesome-vpn',        repo: 'https://github.com/awesome-vpn/awesome-vpn',        url: 'https://raw.githubusercontent.com/awesome-vpn/awesome-vpn/master/all' },
+  { id: 'mahdibland',    name: 'mahdibland/V2RayAggregator',     repo: 'https://github.com/mahdibland/V2RayAggregator',     url: 'https://raw.githubusercontent.com/mahdibland/V2RayAggregator/master/sub/sub_merge.txt' },
+  { id: 'eternity',      name: 'mahdibland (Eternity)',          repo: 'https://github.com/mahdibland/V2RayAggregator',     url: 'https://raw.githubusercontent.com/mahdibland/V2RayAggregator/master/Eternity.txt' },
+  { id: 'epodonios',     name: 'Epodonios/v2ray-configs',        repo: 'https://github.com/Epodonios/v2ray-configs',        url: 'https://raw.githubusercontent.com/Epodonios/v2ray-configs/main/All_Configs_Sub.txt' },
+  { id: 'barry-far',     name: 'barry-far/V2ray-Config',         repo: 'https://github.com/barry-far/V2ray-Config',         url: 'https://raw.githubusercontent.com/barry-far/V2ray-Config/main/All_Configs_Sub.txt' },
+  { id: 'barabama',      name: 'Barabama/FreeNodes',             repo: 'https://github.com/Barabama/FreeNodes',             url: 'https://raw.githubusercontent.com/Barabama/FreeNodes/feat/ai-crawler-v2/nodes/nodev2ray.txt' },
+  { id: 'snakem982',     name: 'snakem982/proxypool',            repo: 'https://github.com/snakem982/proxypool',            url: 'https://raw.githubusercontent.com/snakem982/proxypool/main/source/v2ray-2.txt' },
+  { id: 'ebrasha',       name: 'ebrasha/free-v2ray-public-list', repo: 'https://github.com/ebrasha/free-v2ray-public-list', url: 'https://raw.githubusercontent.com/ebrasha/free-v2ray-public-list/main/V2Ray-Config-By-EbraSha.txt' },
+  { id: 'matinghambari', name: 'MatinGhanbari/v2ray-configs',    repo: 'https://github.com/MatinGhanbari/v2ray-configs',    url: 'https://raw.githubusercontent.com/MatinGhanbari/v2ray-configs/main/subscriptions/base64/all_sub.txt' },
+  { id: 'ripaojiedian',  name: 'ripaojiedian/freenode',          repo: 'https://github.com/ripaojiedian/freenode',          url: 'https://raw.githubusercontent.com/ripaojiedian/freenode/main/sub' },
+  { id: 'zhuhaiuk',      name: 'zhuhaiuk/free-nodes',            repo: 'https://github.com/zhuhaiuk/free-nodes',            url: 'https://raw.githubusercontent.com/zhuhaiuk/free-nodes/main/nodes.txt' },
 ];
 
 const PROTO_OUT = ['vless', 'vmess', 'trojan', 'ss', 'hysteria2', 'tuic', 'ssr'];
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function fetchText(url, timeoutMs = 45000) {
   const ctrl = new AbortController();
@@ -106,14 +117,7 @@ function parseVmess(rest) {
   const host = v.add || v.address || v.host;
   const port = Number(v.port);
   if (!host || !port || !v.id) return null;
-  return {
-    protocol: 'vmess',
-    host,
-    port,
-    uuid: v.id,
-    name: (name || v.ps || '').toString(),
-    _json: v,
-  };
+  return { protocol: 'vmess', host, port, uuid: v.id, name: (name || v.ps || '').toString(), _json: v };
 }
 
 function parseSS(rest) {
@@ -139,7 +143,7 @@ function parseSS(rest) {
     if (dec.trimStart().startsWith('{')) {
       try {
         const c = parseVmess(rest);
-        if (c) { c._disguisedJson = true; return c; }
+        if (c) return c;
       } catch (e) {}
     }
     const at = dec.lastIndexOf('@');
@@ -213,7 +217,6 @@ function buildLink(c) {
       if (q.flow) p.push('flow=' + encodeURIComponent(q.flow));
       if (q.host) p.push('host=' + encodeURIComponent(q.host));
       if (q.path) p.push('path=' + encodeURIComponent(q.path));
-      if (q.alpn) p.push('alpn=' + encodeURIComponent(q.alpn));
       if (q.insecure === '1' || q.allowInsecure === '1') p.push('allowInsecure=1');
       return 'vless://' + c.uuid + '@' + c.host + ':' + c.port + '?' + p.join('&') + name;
     }
@@ -243,7 +246,7 @@ function parseLink(link) {
     else if (proto === 'ss') c = parseSS(m[2]);
     else if (proto === 'tuic') c = parseTuic(m[2]);
     else if (proto === 'vmess') c = parseVmess(m[2]);
-    if (c) { c.raw = link; if ((proto === 'hysteria2' || proto === 'hy2') && c.protocol === 'hysteria2') c.raw = link.replace(/^hy2:/, 'hysteria2:'); }
+    if (c) c.raw = link;
     return c;
   } catch (e) { return null; }
 }
@@ -282,6 +285,250 @@ function countryHint(host) {
   return null;
 }
 
+function prio(c) {
+  const q = c.params || {};
+  if (c.protocol === 'vless' && q.security === 'reality') return 0;
+  if (c.protocol === 'trojan') return 1;
+  if (c.protocol === 'hysteria2') return 2;
+  if (c.protocol === 'tuic') return 3;
+  if (c.protocol === 'vless' && q.security === 'tls') return 4;
+  if (c.protocol === 'vmess' && c._json && c._json.tls && c._json.tls !== 'none') return 5;
+  if (c.protocol === 'vless') return 6;
+  if (c.protocol === 'vmess') return 7;
+  return 8;
+}
+
+async function tcpCheck(host, port, timeoutMs = TCP_TIMEOUT) {
+  return new Promise((res) => {
+    const s = net.connect({ host, port });
+    s.setTimeout(timeoutMs);
+    s.once('connect', () => { s.destroy(); res(true); });
+    s.once('timeout', () => { s.destroy(); res(false); });
+    s.once('error', () => res(false));
+  });
+}
+
+async function tcpCheckAll(items) {
+  let idx = 0;
+  const results = new Array(items.length).fill(false);
+  const concurrency = 250;
+  const worker = async () => {
+    while (idx < items.length) {
+      const i = idx++;
+      results[i] = await tcpCheck(items[i].host, items[i].port);
+    }
+  };
+  await Promise.all(Array.from({ length: concurrency }, worker));
+  return results;
+}
+
+async function mskPing(hostPort) {
+  let body;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const r = await fetch(`https://check-host.net/check-tcp?host=${encodeURIComponent(hostPort)}&${MSK_NODES.map((n) => `node=${n}`).join('&')}`, {
+        headers: { Accept: 'application/json' },
+      });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      body = await r.json();
+      break;
+    } catch (e) {
+      if (attempt === 2) return { err: true };
+      await sleep(1500 * (attempt + 1));
+    }
+  }
+  if (!body || !body.request_id) return { err: true };
+  const reqId = body.request_id;
+  for (let i = 0; i < 12; i++) {
+    await sleep(1500);
+    try {
+      const rr = await fetch(`https://check-host.net/check-result/${reqId}`, { headers: { Accept: 'application/json' } });
+      const res = await rr.json();
+      let best = null;
+      let gotAny = false;
+      for (const node of Object.values(res || {})) {
+        const arr = Array.isArray(node) ? node : [node];
+        for (const x of arr) {
+          if (!x) continue;
+          if (x.error) { gotAny = true; continue; }
+          const t = (typeof x.time_to_connect === 'number') ? x.time_to_connect : (typeof x.time === 'number' ? x.time : null);
+          if (t !== null) { gotAny = true; best = best === null ? t : Math.min(best, t); }
+        }
+      }
+      if (gotAny) return { rtt: best === null ? null : Math.round(best * 1000) };
+    } catch (e) {}
+  }
+  return { err: true };
+}
+
+async function mskPingAll(hpList) {
+  const out = new Map();
+  async function pass(list, conc, gap, tag) {
+    let idx = 0;
+    const worker = async () => {
+      while (idx < list.length) {
+        const hp = list[idx++];
+        const r = await mskPing(hp);
+        out.set(hp, r.err ? 'err' : r.rtt);
+        if ((out.size % 100) === 0) console.log(`[ping${tag}] ${out.size}/${hpList.length}`);
+        await sleep(gap);
+      }
+    };
+    await Promise.all(Array.from({ length: conc }, worker));
+  }
+  await pass(hpList, 6, 80, '');
+  const failed = hpList.filter((hp) => out.get(hp) === 'err');
+  if (failed.length) {
+    console.log(`[ping] retrying ${failed.length} unresolved...`);
+    await sleep(5000);
+    await pass(failed, 3, 200, '/retry');
+  }
+  const res = new Map();
+  for (const hp of hpList) res.set(hp, out.get(hp) === 'err' ? null : out.get(hp));
+  return res;
+}
+
+const y = (v) => JSON.stringify(v == null ? '' : String(v));
+
+function ssPluginOpts(raw) {
+  if (!raw) return null;
+  const parts = String(raw).split(';').filter(Boolean);
+  const o = { mode: 'websocket' };
+  for (const p of parts.slice(1)) {
+    const eq = p.indexOf('=');
+    if (eq > 0) o[p.slice(0, eq)] = p.slice(eq + 1);
+  }
+  if (parts[0] && parts[0].includes('simple-obfs')) o.mode = o.mode || 'http';
+  return o;
+}
+
+function transportYaml(lines, q, indent) {
+  const t = (q.type || 'tcp').toLowerCase();
+  if (t === 'ws') {
+    lines.push(`${indent}network: ws`);
+    lines.push(`${indent}ws-opts:`);
+    lines.push(`${indent}  path: ${y(q.path || '/')}`);
+    if (q.host) {
+      lines.push(`${indent}  headers:`);
+      lines.push(`${indent}    Host: ${y(q.host)}`);
+    }
+  } else if (t === 'grpc') {
+    lines.push(`${indent}network: grpc`);
+    lines.push(`${indent}grpc-opts:`);
+    lines.push(`${indent}  grpc-service-name: ${y(q.serviceName || q.path || '')}`);
+  }
+}
+
+function clashProxyYaml(c, i) {
+  const q = c.params || {};
+  const ind = '    ';
+  const insecure = q.insecure === '1' || q.allowInsecure === '1';
+  const L = [`  - name: ${y(`${c.protocol}-${i}`)}`, `${ind}server: ${y(c.host)}`, `${ind}port: ${c.port}`, `${ind}type: ${c.protocol}`, `${ind}udp: true`];
+  if (c.protocol === 'vless') {
+    L.push(`${ind}uuid: ${y(c.uuid)}`);
+    const sec = q.security || '';
+    if (sec === 'tls' || sec === 'reality') {
+      L.push(`${ind}tls: true`);
+      L.push(`${ind}servername: ${y(q.sni || q.host || c.host)}`);
+      L.push(`${ind}client-fingerprint: ${y(q.fp || 'chrome')}`);
+    }
+    if (sec === 'reality') {
+      L.push(`${ind}reality-opts:`);
+      L.push(`${ind}  public-key: ${y(q.pbk || '')}`);
+      L.push(`${ind}  short-id: ${y(q.sid || '')}`);
+    }
+    if (q.flow) L.push(`${ind}flow: ${y(q.flow)}`);
+    transportYaml(L, q, ind);
+  } else if (c.protocol === 'vmess') {
+    const v = c._json || {};
+    L.push(`${ind}uuid: ${y(c.uuid)}`);
+    L.push(`${ind}alterId: ${Number(v.aid) || 0}`);
+    L.push(`${ind}cipher: ${y(v.scy || 'auto')}`);
+    if (v.tls && v.tls !== 'none') {
+      L.push(`${ind}tls: true`);
+      L.push(`${ind}servername: ${y(v.sni || v.host || c.host)}`);
+    }
+    transportYaml(L, { type: v.net || 'tcp', path: v.path, host: v.host, serviceName: v.serviceName }, ind);
+  } else if (c.protocol === 'trojan') {
+    L.push(`${ind}password: ${y(c.password)}`);
+    L.push(`${ind}sni: ${y(q.sni || q.peer || c.host)}`);
+    if (insecure) L.push(`${ind}skip-cert-verify: true`);
+    transportYaml(L, q, ind);
+  } else if (c.protocol === 'ss') {
+    L.push(`${ind}cipher: ${y(c.method)}`);
+    L.push(`${ind}password: ${y(c.password)}`);
+    const po = ssPluginOpts(q.plugin);
+    if (po) {
+      L.push(`${ind}plugin: v2ray-plugin`);
+      L.push(`${ind}plugin-opts:`);
+      L.push(`${ind}  mode: ${y(po.mode || 'websocket')}`);
+      if (po.host) L.push(`${ind}  host: ${y(po.host)}`);
+      if (po.path) L.push(`${ind}  path: ${y(po.path)}`);
+      if (po.tls) L.push(`${ind}  tls: true`);
+    }
+  } else if (c.protocol === 'hysteria2') {
+    L.push(`${ind}password: ${y(c.password)}`);
+    L.push(`${ind}sni: ${y(q.sni || q.peer || c.host)}`);
+    if (insecure) L.push(`${ind}skip-cert-verify: true`);
+    if (q.obfs) {
+      L.push(`${ind}obfs: salamander`);
+      L.push(`${ind}obfs-password: ${y(q['obfs-password'] || '')}`);
+    }
+  } else if (c.protocol === 'tuic') {
+    L.push(`${ind}uuid: ${y(c.uuid)}`);
+    L.push(`${ind}password: ${y(c.password)}`);
+    L.push(`${ind}sni: ${y(q.sni || c.host)}`);
+    L.push(`${ind}congestion-controller: bbr`);
+    L.push(`${ind}udp-relay-mode: native`);
+    L.push(`${ind}reduce-rtt: true`);
+    if (insecure) L.push(`${ind}skip-cert-verify: true`);
+  } else {
+    return null;
+  }
+  return L.join('\n');
+}
+
+function sbOutbound(c, tag) {
+  const q = c.params || {};
+  const tlsName = q.sni || q.host || q.peer || c.host;
+  const insecure = q.insecure === '1' || q.allowInsecure === '1';
+  const tlsObj = (reality) => reality
+    ? { enabled: true, server_name: tlsName, utls: { enabled: true, fingerprint: q.fp || 'chrome' }, reality: { enabled: true, public_key: q.pbk || '', short_id: q.sid || '' } }
+    : { enabled: true, server_name: tlsName, insecure, utls: q.fp ? { enabled: true, fingerprint: q.fp } : undefined };
+  const transport = (() => {
+    const t = (q.type || (c._json && c._json.net) || 'tcp').toLowerCase();
+    if (t === 'ws') return { type: 'ws', path: q.path || (c._json && c._json.path) || '/', headers: (q.host || (c._json && c._json.host)) ? { Host: q.host || (c._json && c._json.host) } : undefined };
+    if (t === 'grpc') return { type: 'grpc', service_name: q.serviceName || q.path || '' };
+    if (t === 'http') return { type: 'http', host: q.host ? [q.host] : undefined, path: q.path || '/' };
+    return undefined;
+  })();
+  if (c.protocol === 'vless') {
+    return { type: 'vless', tag, server: c.host, server_port: c.port, uuid: c.uuid, flow: q.flow || '', tls: q.security === 'reality' ? tlsObj(true) : q.security === 'tls' ? tlsObj(false) : undefined, transport };
+  }
+  if (c.protocol === 'vmess') {
+    const v = c._json || {};
+    return { type: 'vmess', tag, server: c.host, server_port: c.port, uuid: c.uuid, security: v.scy || 'auto', tls: v.tls && v.tls !== 'none' ? tlsObj(false) : undefined, transport };
+  }
+  if (c.protocol === 'trojan') {
+    return { type: 'trojan', tag, server: c.host, server_port: c.port, password: c.password, tls: tlsObj(false), transport };
+  }
+  if (c.protocol === 'ss') {
+    const po = ssPluginOpts(q.plugin);
+    return {
+      type: 'shadowsocks', tag, server: c.host, server_port: c.port, method: c.method, password: c.password,
+      plugin: po ? 'v2ray-plugin' : undefined,
+      plugin_opts: po ? ['tls', `mode=${po.mode || 'websocket'}`, po.host ? `host=${po.host}` : null, po.path ? `path=${po.path}` : null].filter(Boolean).join(';') : undefined,
+    };
+  }
+  if (c.protocol === 'tuic') {
+    return { type: 'tuic', tag, server: c.host, server_port: c.port, uuid: c.uuid, password: c.password, congestion_control: 'bbr', udp_relay_mode: 'native', tls: tlsObj(false) };
+  }
+  if (c.protocol === 'hysteria2') {
+    return { type: 'hysteria2', tag, server: c.host, server_port: c.port, password: c.password, tls: { enabled: true, server_name: tlsName, insecure }, obfs: q.obfs ? { type: 'salamander', password: q['obfs-password'] || '' } : undefined };
+  }
+  return null;
+}
+
 (async () => {
   const t0 = Date.now();
   fs.mkdirSync(path.join(DIST, 'sub'), { recursive: true });
@@ -312,7 +559,6 @@ function countryHint(host) {
   }
 
   console.log(`[parse] raw total: ${allRaw.length}`);
-  const nodes = [];
   const byRawKey = new Map();
   let parsedOk = 0;
   for (const { src, link } of allRaw) {
@@ -320,74 +566,162 @@ function countryHint(host) {
     let entry;
     if (c) {
       parsedOk++;
-      entry = {
-        protocol: c.protocol,
-        host: c.host,
-        port: c.port,
-        name: (c.name || '').slice(0, 80),
-        country: countryHint(c.host),
-        src,
-        link: buildLink(c) || link,
-      };
+      entry = { protocol: c.protocol, host: c.host, port: c.port, uuid: c.uuid, password: c.password, method: c.method, name: (c.name || '').slice(0, 80), country: countryHint(c.host), src, link: buildLink(c) || link, params: c.params || {}, _json: c._json };
     } else {
       const protoGuess = (link.match(/^([a-z0-9]+):\/\//) || [])[1] || 'other';
       entry = { protocol: protoGuess === 'hy2' ? 'hysteria2' : protoGuess, host: null, port: null, name: '', country: null, src, link };
     }
-    const key = entry.link;
-    if (byRawKey.has(key)) continue;
-    byRawKey.set(key, entry);
-    nodes.push(entry);
+    if (byRawKey.has(entry.link)) continue;
+    byRawKey.set(entry.link, entry);
   }
-  console.log(`[parse] valid: ${parsedOk}, passthrough+dedup: ${nodes.length}`);
+  const nodes = [...byRawKey.values()];
+  console.log(`[parse] valid: ${parsedOk}, after raw dedup: ${nodes.length}`);
 
-  const byNode = new Map();
+  const byNodeKey = new Set();
   const finalNodes = [];
   for (const n of nodes) {
     if (n.host && n.port) {
       const nk = `${n.protocol}|${n.host}|${n.port}`;
-      if (byNode.has(nk)) continue;
-      byNode.set(nk, n);
+      if (byNodeKey.has(nk)) continue;
+      byNodeKey.add(nk);
     }
     finalNodes.push(n);
   }
-  finalNodes.sort((a, b) => a.protocol.localeCompare(b.protocol) || String(a.host).localeCompare(String(b.host)));
   console.log(`[dedup] final nodes: ${finalNodes.length}`);
 
+  console.log('[tcp] liveness check...');
+  const tcpable = finalNodes.filter((n) => n.host && n.port);
+  const tcpRes = await tcpCheckAll(tcpable);
+  const aliveSet = new Set();
+  for (let i = 0; i < tcpable.length; i++) if (tcpRes[i]) aliveSet.add(tcpable[i]);
+  const tcpAlive = tcpable.filter((n) => aliveSet.has(n)).sort((a, b) => prio(a) - prio(b));
+  console.log(`[tcp] alive: ${tcpAlive.length}/${tcpable.length}`);
+
+  let moscowList = [];
+  let moscow = null;
+  if (SKIP_PING) {
+    console.log('[ping] SKIP_PING=1, russia list = tcp-alive by priority');
+    moscowList = [];
+  } else {
+    const pingPool = tcpAlive.slice(0, PING_CAP);
+    const hpMap = new Map();
+    for (const n of pingPool) {
+      const hp = `${n.host}:${n.port}`;
+      if (!hpMap.has(hp)) hpMap.set(hp, []);
+      hpMap.get(hp).push(n);
+    }
+    const hpList = [...hpMap.keys()];
+    console.log(`[ping] Moscow check-host.net for ${hpList.length} endpoints (cap ${PING_CAP})...`);
+    const pingMap = await mskPingAll(hpList);
+    moscowList = [];
+    for (const [hp, rtt] of pingMap) {
+      if (rtt === null) continue;
+      for (const n of hpMap.get(hp)) { n.rtt = rtt; moscowList.push(n); }
+    }
+    moscowList.sort((a, b) => a.rtt - b.rtt);
+    moscow = moscowList.length;
+    console.log(`[ping] reachable from Moscow: ${moscowList.length}/${hpList.length} endpoints`);
+  }
+
+  const ruSource = SKIP_PING ? tcpAlive : moscowList;
+  fs.writeFileSync(path.join(DIST, 'sub', 'russia.txt'), ruSource.map((n) => n.link).join('\n') + '\n');
+  fs.writeFileSync(path.join(DIST, 'sub', 'russia_base64.txt'), Buffer.from(ruSource.map((n) => n.link).join('\n')).toString('base64'));
+
+  const exportSet = (ruSource.length >= 20 ? ruSource : tcpAlive.length ? tcpAlive : finalNodes.filter((n) => n.host)).slice(0, EXPORT_CAP);
+
+  const proxyYamls = [];
+  const sbOutbounds = [];
+  const tags = [];
+  let i = 0;
+  for (const n of exportSet) {
+    const tag = `${n.protocol}-${i++}`;
+    const yl = clashProxyYaml(n, i - 1 + 0);
+    if (yl) proxyYamls.push(yl);
+    const ob = sbOutbound(n, tag);
+    if (ob) { sbOutbounds.push(ob); tags.push(tag); }
+  }
+
+  const clashConf = [
+    'port: 7890',
+    'socks-port: 7891',
+    'allow-lan: false',
+    'mode: rule',
+    'log-level: warning',
+    '',
+    'proxies:',
+    ...proxyYamls,
+    '',
+    'proxy-groups:',
+    '  - name: PROXY',
+    '    type: select',
+    '    proxies: [AUTO, DIRECT]',
+    '  - name: AUTO',
+    '    type: url-test',
+    '    url: "http://www.gstatic.com/generate_204"',
+    '    interval: 300',
+    '    tolerance: 50',
+    '    proxies:',
+    ...tags.map((t) => `      - ${y(t)}`),
+    '',
+    'rules:',
+    '  - MATCH,PROXY',
+    '',
+  ].join('\n');
+  fs.writeFileSync(path.join(DIST, 'sub', 'clash.yaml'), clashConf);
+
+  const sbConf = {
+    log: { level: 'warn' },
+    dns: { servers: [{ tag: 'remote', address: 'https://1.1.1.1/dns-query' }, { tag: 'local', address: 'local' }], final: 'remote' },
+    inbounds: [{ type: 'mixed', tag: 'in', listen: '127.0.0.1', listen_port: 2080 }],
+    outbounds: [
+      { type: 'selector', tag: 'PROXY', outbounds: ['AUTO'], interrupt_exist_connections: true },
+      { type: 'urltest', tag: 'AUTO', outbounds: tags, url: 'http://www.gstatic.com/generate_204', interval: '5m', tolerance: 50 },
+      ...sbOutbounds,
+    ],
+    route: { final: 'PROXY', auto_detect_interface: true },
+  };
+  fs.writeFileSync(path.join(DIST, 'sub', 'sing-box.json'), JSON.stringify(sbConf, null, 2));
+
+  fs.writeFileSync(path.join(DIST, 'sub', 'all.txt'), finalNodes.map((n) => n.link).join('\n') + '\n');
+  fs.writeFileSync(path.join(DIST, 'sub', 'base64.txt'), Buffer.from(finalNodes.map((n) => n.link).join('\n')).toString('base64'));
   const protocols = {};
   for (const p of PROTO_OUT) protocols[p] = [];
   for (const n of finalNodes) {
     if (!protocols[n.protocol]) protocols[n.protocol] = [];
     protocols[n.protocol].push(n.link);
   }
-
-  fs.writeFileSync(path.join(DIST, 'sub', 'all.txt'), finalNodes.map((n) => n.link).join('\n') + '\n');
-  fs.writeFileSync(path.join(DIST, 'sub', 'base64.txt'), Buffer.from(finalNodes.map((n) => n.link).join('\n')).toString('base64'));
-  for (const p of Object.keys(protocols)) {
-    if (!protocols[p].length) continue;
-    fs.writeFileSync(path.join(DIST, 'sub', p + '.txt'), protocols[p].join('\n') + '\n');
-    fs.writeFileSync(path.join(DIST, 'sub', p + '_base64.txt'), Buffer.from(protocols[p].join('\n')).toString('base64'));
+  for (const [p, arr] of Object.entries(protocols)) {
+    if (!arr.length) continue;
+    fs.writeFileSync(path.join(DIST, 'sub', p + '.txt'), arr.join('\n') + '\n');
+    fs.writeFileSync(path.join(DIST, 'sub', p + '_base64.txt'), Buffer.from(arr.join('\n')).toString('base64'));
   }
 
   const protoCounts = {};
   for (const [p, arr] of Object.entries(protocols)) if (arr.length) protoCounts[p] = arr.length;
   const countries = {};
-  for (const n of finalNodes) {
-    if (!n.country) continue;
-    countries[n.country] = (countries[n.country] || 0) + 1;
-  }
+  for (const n of finalNodes) if (n.country) countries[n.country] = (countries[n.country] || 0) + 1;
+  const ruProtocols = {};
+  for (const n of ruSource) ruProtocols[n.protocol] = (ruProtocols[n.protocol] || 0) + 1;
+
   const data = {
     updated: new Date().toISOString(),
     stats: {
       fetchedRaw: allRaw.length,
       parsedValid: parsedOk,
       nodes: finalNodes.length,
+      tcpAlive: tcpAlive.length,
+      moscow,
+      exported: exportSet.length,
       sourcesTotal: SOURCES.length,
       sourcesOk: srcStats.filter((s) => s.ok).length,
     },
     protocols: protoCounts,
+    russiaTotal: ruSource.length,
+    russiaProtocols: ruProtocols,
+    pingSkipped: SKIP_PING,
     countries,
     sources: srcStats,
   };
   fs.writeFileSync(path.join(DIST, 'data.json'), JSON.stringify(data));
-  console.log(`[done] ${(Date.now() - t0) / 1000 | 0}s, nodes: ${finalNodes.length}, protocols: ${JSON.stringify(protoCounts)}`);
+  console.log(`[done] ${(Date.now() - t0) / 1000 | 0}s nodes=${finalNodes.length} alive=${tcpAlive.length} moscow=${moscow} exported=${exportSet.length}`);
 })();

@@ -4,7 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>VPN Hub — агрегатор бесплатных VPN-конфигов</title>
-<meta name="description" content="Сборка бесплатных VPN-конфигураций из открытых источников GitHub в одну подписку">
+<meta name="description" content="Сборка и проверка бесплатных VPN-конфигураций из открытых источников GitHub">
+<script src="assets/qrcode.js"></script>
 <style>
   :root {
     --bg: #0b0e14;
@@ -33,12 +34,13 @@
     -webkit-background-clip: text; background-clip: text; color: transparent;
   }
   .sub { color: var(--muted); margin-top: 6px; font-size: 14px; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-top: 24px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-top: 24px; }
   .card {
     background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
     padding: 16px; text-align: center;
   }
   .card .num { font-size: 26px; font-weight: 800; }
+  .card .num.small { font-size: 20px; }
   .card .lbl { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 4px; }
   h2 { font-size: 18px; margin: 36px 0 14px; display: flex; align-items: center; gap: 8px; }
   h2::before { content: ''; width: 4px; height: 18px; border-radius: 2px; background: linear-gradient(180deg, var(--accent), var(--accent2)); }
@@ -48,18 +50,22 @@
     padding: 6px 14px; font-size: 13px; color: var(--text);
   }
   .chip b { color: var(--accent2); }
-  .subs { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+  .chip.ru b { color: #ffd166; }
+  .note { color: var(--muted); font-size: 12px; margin-top: 8px; }
+  .subs { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; }
   .subcard {
     background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px;
     display: flex; flex-direction: column; gap: 10px;
   }
-  .subcard .t { font-weight: 700; font-size: 14px; display: flex; justify-content: space-between; align-items: center; }
-  .subcard .cnt { color: var(--accent2); font-size: 12px; font-weight: 600; }
+  .subcard.hot { border-color: rgba(34,211,165,.45); background: linear-gradient(180deg, rgba(34,211,165,.06), var(--panel)); }
+  .subcard .t { font-weight: 700; font-size: 14px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .subcard .cnt { color: var(--accent2); font-size: 12px; font-weight: 600; white-space: nowrap; }
+  .subcard.hot .cnt { color: #ffd166; }
   .subcard .url {
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: var(--muted);
     word-break: break-all; background: var(--panel2); border-radius: 8px; padding: 8px;
   }
-  .row { display: flex; gap: 8px; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; }
   button {
     cursor: pointer; border: none; border-radius: 9px; padding: 9px 14px;
     font-size: 13px; font-weight: 700; color: #fff; background: var(--accent);
@@ -92,6 +98,19 @@
     padding: 11px 22px; border-radius: 999px; transition: transform .25s; z-index: 9;
   }
   .toast.show { transform: translateX(-50%) translateY(0); }
+  .modal-bg {
+    position: fixed; inset: 0; background: rgba(0,0,0,.7); backdrop-filter: blur(3px);
+    display: none; align-items: center; justify-content: center; z-index: 10; padding: 16px;
+  }
+  .modal-bg.show { display: flex; }
+  .modal {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 18px;
+    padding: 24px; max-width: 360px; width: 100%; text-align: center;
+  }
+  .modal .m-title { font-weight: 800; font-size: 15px; margin-bottom: 12px; }
+  .modal .qrbox { background: #fff; border-radius: 12px; padding: 12px; display: inline-block; }
+  .modal .qrbox svg { display: block; }
+  .modal .m-url { font-family: ui-monospace, monospace; font-size: 10px; color: var(--muted); word-break: break-all; margin: 12px 0; }
   footer { margin-top: 48px; text-align: center; color: var(--muted); font-size: 12px; }
   footer a { color: var(--accent); text-decoration: none; }
   .warn { background: rgba(255,107,107,.08); border: 1px solid rgba(255,107,107,.25); border-radius: 12px;
@@ -103,13 +122,16 @@
 <div class="wrap">
   <header>
     <h1>VPN Hub</h1>
-    <div class="sub">Агрегатор бесплатных конфигов из открытых источников GitHub · обновляется автоматически каждый час</div>
+    <div class="sub">Агрегатор и проверка бесплатных конфигов из открытых источников GitHub · обновление каждые 2 часа</div>
   </header>
 
   <div class="grid" id="stats"></div>
 
   <h2>Протоколы</h2>
   <div class="chips" id="chips"></div>
+  <h2>Доступно из Москвы</h2>
+  <div class="chips" id="ruChips"></div>
+  <div class="note" id="ruNote"></div>
 
   <h2>Подписки</h2>
   <div class="subs" id="subs"></div>
@@ -131,6 +153,15 @@
     Собрано из <span id="fSrc">—</span> репозиториев GitHub · обновлено <span id="upd">—</span> ·
     <a href="https://github.com/kuzhakovAndrey/vpn-hub">исходники</a>
   </footer>
+</div>
+
+<div class="modal-bg" id="modalBg">
+  <div class="modal">
+    <div class="m-title" id="mTitle"></div>
+    <div class="qrbox" id="mQr"></div>
+    <div class="m-url" id="mUrl"></div>
+    <button id="mClose">Закрыть</button>
+  </div>
 </div>
 <div class="toast" id="toast">Скопировано ✓</div>
 
@@ -162,35 +193,66 @@ function toast(msg) {
 
 function subUrl(file) { return new URL(BASE + 'sub/' + file, location.href).href; }
 
+function showQr(title, url) {
+  document.getElementById('mTitle').textContent = title;
+  document.getElementById('mUrl').textContent = url;
+  const qr = qrcode(0, 'M');
+  qr.addData(url);
+  qr.make();
+  document.getElementById('mQr').innerHTML = qr.createSvgTag({ cellSize: 4, margin: 2, scalable: true });
+  const svg = document.querySelector('#mQr svg');
+  if (svg) { svg.style.width = '256px'; svg.style.height = '256px'; }
+  document.getElementById('modalBg').classList.add('show');
+}
+document.getElementById('mClose').addEventListener('click', () => document.getElementById('modalBg').classList.remove('show'));
+document.getElementById('modalBg').addEventListener('click', (e) => { if (e.target.id === 'modalBg') e.currentTarget.classList.remove('show'); });
+
 function renderSubs() {
   const box = document.getElementById('subs');
-  const items = [{ file: 'base64.txt', title: 'Все протоколы (base64)', cnt: DATA.stats.nodes },
-                 { file: 'all.txt', title: 'Все протоколы (plain)', cnt: DATA.stats.nodes }];
-  for (const [p, cnt] of Object.entries(DATA.protocols)) items.push({ file: p + '_base64.txt', title: p.toUpperCase() + ' (base64)', cnt });
+  const items = [
+    { file: 'russia_base64.txt', title: '★ Проверенные из Москвы', cnt: DATA.russiaTotal, hot: true },
+    { file: 'base64.txt', title: 'Все протоколы (base64)', cnt: DATA.stats.nodes },
+    { file: 'all.txt', title: 'Все протоколы (plain)', cnt: DATA.stats.nodes },
+    { file: 'clash.yaml', title: 'Clash Meta / mihomo', cnt: DATA.stats.exported },
+    { file: 'sing-box.json', title: 'sing-box', cnt: DATA.stats.exported },
+  ];
+  for (const [p] of Object.entries(DATA.protocols)) items.push({ file: p + '_base64.txt', title: p.toUpperCase() + ' (base64)', cnt: DATA.protocols[p] });
   box.innerHTML = '';
   for (const it of items) {
     const url = subUrl(it.file);
     const el = document.createElement('div');
-    el.className = 'subcard';
+    el.className = 'subcard' + (it.hot ? ' hot' : '');
     el.innerHTML = `<div class="t">${it.title} <span class="cnt">${fmt(it.cnt)}</span></div>
       <div class="url">${url}</div>
-      <div class="row"><button data-copy="${url}">Копировать URL</button>
-      <button class="ghost" onclick="location.href='${url}'">Открыть</button></div>`;
-    el.querySelector('button').addEventListener('click', () => copy(url));
+      <div class="row"><button data-copy="${url}">Копировать</button>
+      <button class="ghost qr-btn">QR</button>
+      <button class="ghost open-btn">Открыть</button></div>`;
+    el.querySelector('[data-copy]').addEventListener('click', () => copy(url));
+    el.querySelector('.qr-btn').addEventListener('click', () => showQr(it.title, url));
+    el.querySelector('.open-btn').addEventListener('click', () => location.href = url);
     box.appendChild(el);
   }
 }
 
 function render() {
   const s = DATA.stats;
+  const moscowVal = DATA.pingSkipped ? fmt(s.tcpAlive) : (s.moscow == null ? '…' : fmt(s.moscow));
   document.getElementById('stats').innerHTML = `
     <div class="card"><div class="num">${fmt(s.nodes)}</div><div class="lbl">конфигов всего</div></div>
+    <div class="card"><div class="num">${fmt(s.tcpAlive)}</div><div class="lbl">отвечают по TCP</div></div>
+    <div class="card"><div class="num small">${moscowVal}</div><div class="lbl">${DATA.pingSkipped ? 'живых (TCP)' : 'доступно из Москвы'}</div></div>
     <div class="card"><div class="num">${fmt(s.sourcesOk)}/${s.sourcesTotal}</div><div class="lbl">источников онлайн</div></div>
-    <div class="card"><div class="num">${Object.keys(DATA.protocols).length}</div><div class="lbl">протоколов</div></div>
     <div class="card"><div class="num">${Object.keys(DATA.countries).length}</div><div class="lbl">стран (оценка)</div></div>`;
   document.getElementById('chips').innerHTML = Object.entries(DATA.protocols)
     .sort((a, b) => b[1] - a[1])
     .map(([p, c]) => `<span class="chip">${p} <b>${fmt(c)}</b></span>`).join('');
+  const rp = Object.entries(DATA.russiaProtocols || {}).sort((a, b) => b[1] - a[1]);
+  document.getElementById('ruChips').innerHTML = rp.length
+    ? rp.map(([p, c]) => `<span class="chip ru">${p} <b>${fmt(c)}</b></span>`).join('')
+    : '<span class="chip">нет данных за этот прогон</span>';
+  document.getElementById('ruNote').textContent = s.moscow == null && !DATA.pingSkipped
+    ? 'Проверка пинга ещё выполняется или не завершалась.'
+    : (DATA.pingSkipped ? 'Пинг пропущен в этом прогоне — показаны живые по TCP.' : 'Узлы, до которых есть TCP-маршрут из Москвы (проверка check-host.net), отсортированы по RTT в подписке.');
   document.getElementById('srcRows').innerHTML = DATA.sources.map((x) =>
     `<tr><td><a href="${x.repo}" target="_blank" rel="noopener">${x.name}</a></td>
      <td>${fmt(x.count)}</td><td>${x.ok ? '<span class="ok">● OK</span>' : '<span class="fail">● FAIL</span>'}</td></tr>`).join('');
